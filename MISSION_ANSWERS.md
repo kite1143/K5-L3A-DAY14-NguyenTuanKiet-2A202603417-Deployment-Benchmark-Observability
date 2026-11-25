@@ -211,7 +211,43 @@ referrer-policy: strict-origin-when-cross-origin
 
 ## Part 5: Scaling & Reliability
 
-_(Chưa thực hiện — CP4)_
+### Exercise 5.1–5.3: Health Check & Graceful Shutdown (`05-scaling-reliability/develop/`)
+
+1. **Phân biệt Liveness (`/health`) và Readiness (`/ready`):**
+   - `GET /health` (**Liveness probe**): Kiểm tra process còn sống không (trả `200` kèm uptime, memory). Nếu fail → platform restart container.
+   - `GET /ready` (**Readiness probe**): Kiểm tra agent đã sẵn sàng nhận traffic mới chưa (trả `503` khi đang khởi động, đang shutdown, hoặc dependency như Redis chưa sẵn sàng). Nếu fail → load balancer ngừng route request mới tới instance đó, nhưng không restart container.
+   - Kết quả đo thực tế:
+     ```json
+     GET /health -> {"status":"ok","uptime_seconds":0.3,"version":"1.0.0","environment":"development","timestamp":"2026-11-25T09:25:42.340325+00:00","checks":{"memory":{"status":"ok","used_percent":11.0}}}
+     GET /ready  -> {"ready":true,"in_flight_requests":1}
+     ```
+
+2. **Graceful Shutdown khi nhận `SIGTERM`:**
+   - Gửi 2 request `POST /ask` song song rồi gửi `kill -SIGTERM` sau 0.5 giây.
+   - Kết quả: Cả 2 request đang chạy vẫn hoàn thành và trả **`HTTP 200`**, sau đó server mới ghi log `Graceful shutdown initiated...` → `Shutdown complete` và thoát an toàn.
+
+### Exercise 5.4–5.5: Stateless Agent + Redis + Nginx (`05-scaling-reliability/production/`)
+
+- **Tại sao state trong RAM hỏng khi scale nhiều instance?** Nếu lưu lịch sử hội thoại trong RAM của từng process, Nginx load balancer (round-robin) sẽ gửi request 1 tới `instance-A` và request 2 tới `instance-B`, làm `instance-B` không thấy lịch sử của session đó.
+- **Giải pháp Stateless:** Đưa toàn bộ session history ra **Redis** dùng chung cho cả 3 replica.
+- **Kết quả chạy `docker compose -p k5-day14-scaling up -d --build --scale agent=3` và `python test_stateless.py`:**
+  ```text
+  Session ID: 1d7d62e9-f698-431b-8cc5-15c1c3db3ccb
+  Request 1: [instance-3208ec]
+  Request 2: [instance-40273b]
+  Request 3: [instance-689afc]
+  Request 4: [instance-3208ec]
+  Request 5: [instance-40273b]
+
+  Total requests: 5
+  Instances used: {'instance-40273b', 'instance-689afc', 'instance-3208ec'}
+  ✅ All requests served despite different instances!
+
+  --- Conversation History ---
+  Total messages: 10
+  ✅ Session history preserved across all instances via Redis!
+  ```
+  Nginx phân phối đều 5 request qua cả 3 instance (`instance-3208ec`, `instance-40273b`, `instance-689afc`), nhưng `GET /chat/{session_id}/history` vẫn đọc đủ 10 message (5 user + 5 assistant) từ Redis.
 
 ## Part 6: Final Project (`check_production_ready.py`)
 
@@ -224,3 +260,4 @@ _(Chưa thực hiện — CP5)_
 - **CP1:** Dùng AI hỗ trợ đối chiếu các anti-pattern giữa `01-localhost-vs-production/develop/app.py` và `production/app.py`, chạy kiểm thử cả hai app trong WSL2 để lấy output thực tế và tổng hợp câu trả lời vào `MISSION_ANSWERS.md`.
 - **CP2:** Dùng AI hỗ trợ chạy build `my-agent:develop` và `my-agent:advanced`, test Docker Compose stack qua Nginx trong WSL2 và ghi lại số đo kích thước image cùng câu trả lời Part 2 vào `MISSION_ANSWERS.md`.
 - **CP3:** Dùng AI hỗ trợ chạy test API Key (401/200), lấy JWT token `student/demo123`, chạy vòng lặp kiểm tra rate limit (429) trong WSL2 và tổng hợp giải thích Cost Guard vào `MISSION_ANSWERS.md`.
+- **CP4:** Dùng AI hỗ trợ chạy test `/health`, `/ready`, graceful shutdown (2 in-flight request + `SIGTERM`) ở bản develop, chạy stack 3 replicas + Redis + Nginx với `test_stateless.py` trong WSL2 và ghi kết quả vào `MISSION_ANSWERS.md`.
