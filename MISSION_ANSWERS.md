@@ -128,7 +128,35 @@ POST http://localhost/ask  (-d '{"question": "Explain microservices"}')
 
 ## Part 3: Cloud Deployment
 
-_(Chưa thực hiện — CP6)_
+### Exercise 3.1 / 3.2: Deploy Agent Part 6 (`06-lab-complete/`)
+
+- **Platform:** Render (Web Service `Docker` + Key Value Redis)
+- **Public URL:** https://k5-l3a-day14-nguyentuankiet-2a202603417.onrender.com
+- **Kết quả 4 lệnh tự kiểm CP6:**
+  - `GET /health` → `200` (`{"status":"ok","environment":"production"}`)
+  - `GET /ready` → `200` (`{"ready":true}`)
+  - `POST /ask` (không key) → `401`
+  - `POST /ask` (có `X-API-Key`) → `200` (`{"question":"Hello","answer":"...","cost_usd":2.07e-05}`)
+- **Screenshots:** `screenshots/dashboard.png`, `screenshots/running.png`, `screenshots/test.png` (chi tiết xem [DEPLOYMENT.md](DEPLOYMENT.md))
+
+### So sánh `railway.toml` và `render.yaml`
+
+| Tiêu chí | `railway.toml` | `render.yaml` |
+|----------|----------------|---------------|
+| Định dạng & phạm vi | TOML — cấu hình cho **1 service** hiện tại | YAML (Blueprint IaC) — khai báo được **nhiều service/database** cùng lúc trong `services:` |
+| Cách build | `[build] builder = "DOCKERFILE"` | `runtime: docker` trong từng service |
+| Health check | `[deploy] healthcheckPath = "/health"` | `healthCheckPath: /health` |
+| Biến môi trường & Secret | Không khai báo secret trong file; set riêng qua Dashboard hoặc `railway variables set` | Khai báo `envVars` ngay trong YAML; secret dùng `generateValue: true` (tự sinh) hoặc `sync: false` (nhập trên Dashboard) |
+| Lý do khác nhau | Railway ưu tiên cấu hình tối giản theo từng service, quản lý env/plugin (Redis) tách biệt trên Dashboard/CLI | Render dùng Blueprint để dựng toàn bộ stack (web + env + DB/Redis) lặp lại được từ 1 file Git |
+
+### Exercise 3.3: Cloud Run CI/CD Pipeline (`03-cloud-deployment/production-cloud-run/`)
+
+- `cloudbuild.yaml` định nghĩa pipeline 4 bước chạy tuần tự (`waitFor`) khi có trigger push lên `main`:
+  1. **`test`** (`python:3.11-slim`): cài `requirements.txt` + `pytest` và chạy `pytest tests/ -v`.
+  2. **`build`** (`gcr.io/cloud-builders/docker`): build Docker image gắn tag `$COMMIT_SHA` và `latest` (tận dụng `--cache-from` từ image `latest`).
+  3. **`push`**: đẩy cả 2 tag lên Google Container Registry (`gcr.io/$PROJECT_ID/ai-agent`).
+  4. **`deploy`** (`gcloud run deploy`): triển khai bản `$COMMIT_SHA` lên Cloud Run (`asia-southeast1`), cấu hình autoscale (`min=1`, `max=10`), `512Mi` RAM / `1` CPU, và inject secret từ Secret Manager (`--set-secrets`).
+- `service.yaml` là file IaC chuẩn Knative (`serving.knative.dev/v1`) mô tả cấu hình runtime tương ứng: `containerConcurrency: 80`, `livenessProbe` (`/health`), `startupProbe` (`/ready`), và lấy `OPENAI_API_KEY` / `AGENT_API_KEY` từ Secret Manager (`secretKeyRef`).
 
 ## Part 4: API Security
 
@@ -286,3 +314,4 @@ Chạy `python check_production_ready.py` trong `06-lab-complete/` (WSL2 + Docke
 - **CP3:** Dùng AI hỗ trợ chạy test API Key (401/200), lấy JWT token `student/demo123`, chạy vòng lặp kiểm tra rate limit (429) trong WSL2 và tổng hợp giải thích Cost Guard vào `MISSION_ANSWERS.md`.
 - **CP4:** Dùng AI hỗ trợ chạy test `/health`, `/ready`, graceful shutdown (2 in-flight request + `SIGTERM`) ở bản develop, chạy stack 3 replicas + Redis + Nginx với `test_stateless.py` trong WSL2 và ghi kết quả vào `MISSION_ANSWERS.md`.
 - **CP5:** Dùng AI hỗ trợ hoàn thiện các file TODO trong `06-lab-complete/` (`app/`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`, `railway.toml`, `render.yaml`) và chạy `python check_production_ready.py` trong WSL2 đạt `PASS 12/12` (`43/43 checks passed`).
+- **CP6:** Dùng AI hỗ trợ kiểm tra 4 endpoint trên URL Render đã deploy (`/health`, `/ready`, `/ask` 401/200), viết `DEPLOYMENT.md` và hoàn thiện mục Part 3 (so sánh `railway.toml` vs `render.yaml`, mô tả pipeline Cloud Run) trong `MISSION_ANSWERS.md`.
