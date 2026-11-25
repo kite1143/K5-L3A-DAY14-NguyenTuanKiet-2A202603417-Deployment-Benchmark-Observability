@@ -132,7 +132,82 @@ _(Chưa thực hiện — CP6)_
 
 ## Part 4: API Security
 
-_(Chưa thực hiện — CP3)_
+### Exercise 4.1: API Key Authentication (`04-api-gateway/develop/`)
+
+1. **Không có API key (→ `401 Unauthorized`):**
+```bash
+curl -i -s -X POST -H "Content-Type: application/json" -d '{"question":"hello"}' http://localhost:8000/ask
+```
+```http
+HTTP/1.1 401 Unauthorized
+date: Wed, 25 Nov 2026 09:22:38 GMT
+server: uvicorn
+content-length: 67
+content-type: application/json
+
+{"detail":"Missing API key. Include header: X-API-Key: <your-key>"}
+```
+
+2. **Có API key hợp lệ (→ `200 OK`):**
+```bash
+curl -i -s -H "X-API-Key: secret-key-123" -X POST -H "Content-Type: application/json" -d '{"question":"hello"}' http://localhost:8000/ask
+```
+```http
+HTTP/1.1 200 OK
+date: Wed, 25 Nov 2026 09:22:38 GMT
+server: uvicorn
+content-length: 114
+content-type: application/json
+
+{"question":"hello","answer":"Agent đang hoạt động tốt! (mock response) Hỏi thêm câu hỏi đi nhé."}
+```
+
+### Exercise 4.2 & 4.3: JWT Authentication & Rate Limiting (`04-api-gateway/production/`)
+
+1. **Lấy JWT token (`POST /auth/token` với `student` / `demo123`) và gọi request đầu tiên (→ `200 OK`):**
+```bash
+curl -i -s -H "Authorization: Bearer <REDACTED_TOKEN>" -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" -d '{"question":"what is docker?"}'
+```
+```http
+HTTP/1.1 200 OK
+date: Wed, 25 Nov 2026 09:22:40 GMT
+server: uvicorn
+content-length: 196
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-xss-protection: 1; mode=block
+referrer-policy: strict-origin-when-cross-origin
+
+{"question":"what is docker?","answer":"Container là cách đóng gói app để chạy ở mọi nơi. Build once, run anywhere!","usage":{"requests_remaining":9,"budget_remaining_usd":1.9e-05}}
+```
+
+2. **Vòng lặp gọi liên tiếp vượt 10 req/phút (request 2–10 → `200`, request 11 → `429 Too Many Requests`):**
+```http
+HTTP/1.1 429 Too Many Requests
+date: Wed, 25 Nov 2026 09:22:41 GMT
+server: uvicorn
+x-ratelimit-limit: 10
+x-ratelimit-remaining: 0
+x-ratelimit-reset: 1795598622
+retry-after: 59
+content-length: 98
+content-type: application/json
+x-content-type-options: nosniff
+x-frame-options: DENY
+x-xss-protection: 1; mode=block
+referrer-policy: strict-origin-when-cross-origin
+
+{"detail":{"error":"Rate limit exceeded","limit":10,"window_seconds":60,"retry_after_seconds":59}}
+```
+
+### Exercise 4.4: Cách làm Cost Guard (`04-api-gateway/production/cost_guard.py`)
+
+- **Phân biệt với Rate Limit:** Rate limit giới hạn **tốc độ** (số request/phút để chống spam/DDoS), còn Cost Guard giới hạn **chi phí tiền** theo ngày (tránh một user gửi prompt rất dài hoặc gọi đều đặn cả ngày gây vượt ngân sách LLM). Cần cả hai vì request hợp lệ dưới ngưỡng rate limit vẫn có thể đốt hết tiền nếu token lớn.
+- **Cơ chế hoạt động trong `CostGuard`:**
+  1. **Trước khi gọi LLM (`check_budget(username)`):** Kiểm tra tổng chi phí toàn hệ thống (`_global_cost >= global_daily_budget_usd` = `$10/ngày` → trả `503`) và chi phí trong ngày của user (`record.total_cost_usd >= daily_budget_usd` = `$1/ngày` → trả `402 Payment Required`). Nếu đạt `80%` (`warn_at_pct = 0.8`) thì ghi log cảnh báo.
+  2. **Sau khi gọi LLM (`record_usage(username, input_tokens, output_tokens)`):** Cộng dồn token input/output và tính tiền theo đơn giá (`$0.00015 / 1K input`, `$0.0006 / 1K output`), cập nhật cả record của user và `_global_cost`. Trong production thực tế (như Part 6), bộ đếm này phải lưu trong **Redis** thay vì RAM để không mất khi restart hoặc chạy nhiều instance.
 
 ## Part 5: Scaling & Reliability
 
@@ -148,3 +223,4 @@ _(Chưa thực hiện — CP5)_
 
 - **CP1:** Dùng AI hỗ trợ đối chiếu các anti-pattern giữa `01-localhost-vs-production/develop/app.py` và `production/app.py`, chạy kiểm thử cả hai app trong WSL2 để lấy output thực tế và tổng hợp câu trả lời vào `MISSION_ANSWERS.md`.
 - **CP2:** Dùng AI hỗ trợ chạy build `my-agent:develop` và `my-agent:advanced`, test Docker Compose stack qua Nginx trong WSL2 và ghi lại số đo kích thước image cùng câu trả lời Part 2 vào `MISSION_ANSWERS.md`.
+- **CP3:** Dùng AI hỗ trợ chạy test API Key (401/200), lấy JWT token `student/demo123`, chạy vòng lặp kiểm tra rate limit (429) trong WSL2 và tổng hợp giải thích Cost Guard vào `MISSION_ANSWERS.md`.
