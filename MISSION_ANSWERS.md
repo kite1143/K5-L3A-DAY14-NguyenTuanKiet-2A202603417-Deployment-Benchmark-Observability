@@ -251,7 +251,31 @@ referrer-policy: strict-origin-when-cross-origin
 
 ## Part 6: Final Project (`check_production_ready.py`)
 
-_(Chưa thực hiện — CP5)_
+Chạy `python check_production_ready.py` trong `06-lab-complete/` (WSL2 + Docker):
+
+```text
+================================================================
+  📋 Checklist Deliverable
+     ✅ Dockerfile (multi-stage, < 500 MB)
+     ✅ docker-compose.yml (agent + redis)
+     ✅ .dockerignore
+     ✅ Health check endpoint (GET /health)
+     ✅ Readiness endpoint (GET /ready)
+     ✅ API Key authentication
+     ✅ Rate limiting
+     ✅ Cost guard
+     ✅ Config từ environment variables
+     ✅ Structured logging
+     ✅ Graceful shutdown
+     ✅ Public URL ready (Railway / Render config)
+----------------------------------------------------------------
+  Result: 12/12 tiêu chí đạt · 43/43 checks passed
+  🎉 PASS 12/12 — PRODUCTION READY! Deploy nào!
+================================================================
+```
+
+- Kích thước Docker image thực tế: **238 MB** (< 500 MB).
+- `docker stop` thoát êm với exit code `0` trong **0.5s**.
 
 ---
 
@@ -261,3 +285,4 @@ _(Chưa thực hiện — CP5)_
 - **CP2:** Dùng AI hỗ trợ chạy build `my-agent:develop` và `my-agent:advanced`, test Docker Compose stack qua Nginx trong WSL2 và ghi lại số đo kích thước image cùng câu trả lời Part 2 vào `MISSION_ANSWERS.md`.
 - **CP3:** Dùng AI hỗ trợ chạy test API Key (401/200), lấy JWT token `student/demo123`, chạy vòng lặp kiểm tra rate limit (429) trong WSL2 và tổng hợp giải thích Cost Guard vào `MISSION_ANSWERS.md`.
 - **CP4:** Dùng AI hỗ trợ chạy test `/health`, `/ready`, graceful shutdown (2 in-flight request + `SIGTERM`) ở bản develop, chạy stack 3 replicas + Redis + Nginx với `test_stateless.py` trong WSL2 và ghi kết quả vào `MISSION_ANSWERS.md`.
+- **CP5:** Dùng AI hỗ trợ hoàn thiện các file TODO trong `06-lab-complete/` (`app/`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `.env.example`, `railway.toml`, `render.yaml`) và chạy `python check_production_ready.py` trong WSL2 đạt `PASS 12/12` (`43/43 checks passed`).
